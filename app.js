@@ -366,7 +366,7 @@ function renderHome(){
   <div class="section-title">Account &amp; cloud sync</div>
   <div class="card"><p class="small muted" style="margin:0">${SY.email?'Signed in as <b>'+esc(SY.email)+'</b>. ':''}Everything is saved on this device first, then uploaded to your own Supabase project whenever there is internet. Photos are stored compressed (about 250 KB) with a small thumbnail.</p>
    <p class="small" style="margin:0" id="sy-status">${esc(syText())}</p>
-   <div class="row"><button class="btn primary" data-act="syncnow">Sync now</button>${SB?(SY.uid?'<button class="btn" data-act="signout">Sign out</button>':'<button class="btn" data-act="signin">Sign in</button>'):''}</div>
+   <div class="row"><button class="btn primary" data-act="syncnow">Sync now</button>${SB?(SY.uid?'<button class="btn" data-act="chpass">Change password</button><button class="btn" data-act="signout">Sign out</button>':'<button class="btn" data-act="signin">Sign in</button>'):''}</div>
    ${SB&&SY.uid?'<button class="btn ghost danger" data-act="signouterase" style="align-self:flex-start">Sign out and erase this device</button>':''}</div>
   <div class="section-title">Install</div>
   <div class="card">${installHTML()}</div>
@@ -596,6 +596,7 @@ document.addEventListener('click',async ev=>{
  case'signout':signOut(false);break;
  case'signouterase':signOut(true);break;
  case'signin':showLogin();break;
+ case'chpass':changePassword();break;
  case'install':if(BIP){BIP.prompt();BIP.userChoice.finally(()=>{BIP=null;render()})}break;
  case'articlestyle':{const c=curC();if(!c)break;c.theme=Object.assign({},c.theme||{},{on:true,accent:'#ff6559',font:'Montserrat',prefix:'Article PD:',linkLabel:'Wrike Link'});saveCustomers();render();toast('Article slide style applied. Upload the logo below.');break}
  case'clogodel':{const c=curC();if(c&&c.theme){delete c.theme.logo;saveCustomers();render()}break}
@@ -1562,9 +1563,10 @@ function showLogin(){
  const el=document.createElement('div');el.id='login';el.className='login';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Sign in');
  el.innerHTML=`<div class="login-in">${BRAND}
   <div class="card"><h2>Sign in</h2>
-   <p class="small muted" style="margin:0">Enter your email. You get an email with a sign-in link and a code. On iPad / iPhone with the app on the home screen, type the code here (the link would open Safari instead of the app).</p>
-   <div class="field"><label for="lg-email">Email</label><input id="lg-email" type="text" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="${esc(lastEmail())}" placeholder="you@example.com"></div>
-   <button class="btn primary block" id="lg-send">Send sign-in email</button>
+   <div class="field"><label for="lg-email">Email</label><input id="lg-email" type="text" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(lastEmail())}" placeholder="you@example.com"></div>
+   <div class="field"><label for="lg-pass">Password</label><input id="lg-pass" type="password" autocomplete="current-password" placeholder="Password"></div>
+   <button class="btn primary block" id="lg-pw">Sign in</button>
+   <button class="btn ghost" id="lg-send" style="align-self:center">Or email me a sign-in link / code</button>
    <div id="lg-code-box" hidden style="display:flex;flex-direction:column;gap:12px"><div class="field"><label for="lg-code">Code from the email</label><input id="lg-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></div><button class="btn dark block" id="lg-verify">Sign in with code</button></div>
    <p class="small" id="lg-msg" role="status" style="margin:0"></p>
   </div>
@@ -1582,6 +1584,18 @@ function showLogin(){
   if(error){msg(/rate|security purposes/i.test(error.message)?'Too many emails. Wait a minute and try again. ('+error.message+')':'Could not send: '+error.message,true);return}
   $('#lg-code-box').hidden=false;$('#lg-code-box').style.display='flex';msg('Email sent to '+email+'. Open the link, or type the code below.');$('#lg-code').focus();
  };
+ $('#lg-pw').onclick=async()=>{
+  const email=emailOf(),password=$('#lg-pass').value;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){msg('Enter a valid email address.',true);return}
+  if(!password){msg('Enter your password.',true);$('#lg-pass').focus();return}
+  if(!navigator.onLine){msg('No internet connection.',true);return}
+  const b=$('#lg-pw');b.disabled=true;b.textContent='Signing in…';
+  try{localStorage.setItem('qcfb-email',email)}catch(e){}
+  const{data,error}=await SB.auth.signInWithPassword({email,password});
+  b.disabled=false;b.textContent='Sign in';
+  if(error||!data.session){msg(/invalid login/i.test((error&&error.message)||'')?'Wrong email or password.':'Could not sign in: '+((error&&error.message)||'try again'),true);return}
+  setUser(data.session.user);hideLogin();toast('Signed in as '+(data.session.user.email||''));scheduleSync();
+ };
  $('#lg-verify').onclick=async()=>{
   const token=$('#lg-code').value.replace(/\s/g,'');if(token.length<6){msg('Type the code from the email.',true);return}
   const b=$('#lg-verify');b.disabled=true;b.textContent='Checking…';
@@ -1590,7 +1604,8 @@ function showLogin(){
   if(error||!data.session){msg('That code did not work: '+((error&&error.message)||'try again'),true);return}
   setUser(data.session.user);hideLogin();toast('Signed in as '+(data.session.user.email||''));scheduleSync();
  };
- $('#lg-email').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#lg-send').click()}});
+ $('#lg-email').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#lg-pass').focus()}});
+ $('#lg-pass').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#lg-pw').click()}});
  $('#lg-code').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#lg-verify').click()}});
  if($('#lg-skip'))$('#lg-skip').onclick=()=>hideLogin();
  return p;
@@ -1621,6 +1636,14 @@ function installHTML(){
  if(BIP)return'<button class="btn primary" data-act="install">Install app</button>';
  if(isIOS())return'<p class="small" style="margin:0">In Safari tap the <b>Share</b> button, then <b>Add to Home Screen</b>. Sign in again inside the installed app (use the code from the email).</p>';
  return'<p class="small" style="margin:0">Use the browser menu → <b>Install app</b> / <b>Add to Home screen</b>.</p>';
+}
+
+function changePassword(){
+ const s=sheet(`<h2>Change password</h2><div class="field"><label for="np1">New password (at least 8 characters)</label><input id="np1" type="password" autocomplete="new-password"></div><div class="field"><label for="np2">Repeat new password</label><input id="np2" type="password" autocomplete="new-password"></div><p class="small" id="np-msg" style="margin:0"></p><div class="row"><button class="btn grow" data-x="no">Cancel</button><button class="btn primary grow" data-x="ok">Save password</button></div>`);
+ const m=t=>{const e=s.querySelector('#np-msg');e.textContent=t;e.style.color='var(--fail)'};
+ s.querySelector('[data-x=no]').onclick=()=>s.remove();
+ s.querySelector('[data-x=ok]').onclick=async()=>{const a=s.querySelector('#np1').value,b=s.querySelector('#np2').value;if(a.length<8)return m('Use at least 8 characters.');if(a!==b)return m('The two passwords are different.');if(!navigator.onLine)return m('No internet connection.');
+  const{error}=await SB.auth.updateUser({password:a});if(error)return m('Could not change: '+error.message);s.remove();toast('Password changed')};
 }
 
 

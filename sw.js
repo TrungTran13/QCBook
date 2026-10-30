@@ -1,6 +1,6 @@
 // QC Field Book – service worker: makes the app open and work without internet.
 // When you change app files, bump VERSION so phones pick up the new files quickly.
-const VERSION = 'qcfb-2026-10-30-1';
+const VERSION = 'qcfb-2026-10-30-2';
 const SHELL = [
   './', './index.html', './app.js', './config.js', './manifest.webmanifest',
   './vendor/supabase.js', './vendor/jspdf.umd.min.js', './vendor/pptxgen.bundle.js',
